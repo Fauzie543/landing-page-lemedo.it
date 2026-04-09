@@ -19,6 +19,12 @@ import {
   X
 } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "./firebase";
+import { AuthProvider } from "./AuthContext";
+import Login from "./Login";
+import AdminDashboard from "./AdminDashboard";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -41,15 +47,18 @@ const Navbar = () => {
             : "bg-transparent px-8 py-8 border-transparent"}`}
       >
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-blue to-deep-violet flex items-center justify-center font-bold text-white">
-            L
-          </div>
-          <span className="text-xl font-display font-bold tracking-tighter">lemedo.it</span>
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-blue to-deep-violet flex items-center justify-center font-bold text-white">
+              L
+            </div>
+            <span className="text-xl font-display font-bold tracking-tighter">lemedo.it</span>
+          </Link>
         </div>
         
         <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
           <a href="#services" className="hover:text-neon-blue transition-colors">Services</a>
           <a href="#portfolio" className="hover:text-neon-blue transition-colors">Portfolio</a>
+          <a href="#products" className="hover:text-neon-blue transition-colors">Products</a>
           <a href="#tech" className="hover:text-neon-blue transition-colors">Tech Stack</a>
           <a href="#contact" className="hover:text-neon-blue transition-colors">Contact</a>
           <button className="px-5 py-2 rounded-full bg-white text-black text-xs font-bold hover:bg-neon-blue hover:text-white transition-all">
@@ -69,6 +78,7 @@ const Navbar = () => {
           >
             <a href="#services" onClick={() => setIsOpen(false)}>Services</a>
             <a href="#portfolio" onClick={() => setIsOpen(false)}>Portfolio</a>
+            <a href="#products" onClick={() => setIsOpen(false)}>Products</a>
             <a href="#tech" onClick={() => setIsOpen(false)}>Tech Stack</a>
             <a href="#contact" onClick={() => setIsOpen(false)}>Contact</a>
             <button className="w-full py-3 rounded-xl bg-white text-black font-bold">Get Started</button>
@@ -320,7 +330,7 @@ const Portfolio = () => {
     <section id="portfolio" className="py-24 px-4 max-w-7xl mx-auto">
       <div className="mb-16 flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
-          <h2 className="text-3xl md:text-5xl font-bold mb-4">Selected Portfolio</h2>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4">Our Portfolio</h2>
           <div className="h-1 w-20 bg-gradient-to-r from-neon-blue to-deep-violet rounded-full" />
         </div>
         <p className="text-white/50 max-w-md">
@@ -352,6 +362,68 @@ const Portfolio = () => {
                 <ExternalLink className="w-4 h-4" />
               </div>
             </div>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const Products = () => {
+  const products = [
+    {
+      title: "Lemedo CRM",
+      desc: "An all-in-one customer relationship management tool for modern sales teams.",
+      icon: <Layers className="w-6 h-6 text-neon-blue" />,
+      tag: "SaaS"
+    },
+    {
+      title: "Streamline Analytics",
+      desc: "Real-time data visualization and processing for high-traffic applications.",
+      icon: <Code2 className="w-6 h-6 text-deep-violet" />,
+      tag: "Analytics"
+    },
+    {
+      title: "SecureVault",
+      desc: "Enterprise-grade encryption and storage solutions for sensitive digital assets.",
+      icon: <Cloud className="w-6 h-6 text-cyan-400" />,
+      tag: "Security"
+    }
+  ];
+
+  return (
+    <section id="products" className="py-24 px-4 max-w-7xl mx-auto">
+      <div className="mb-16">
+        <h2 className="text-3xl md:text-5xl font-bold mb-4">Our Products</h2>
+        <div className="h-1 w-20 bg-gradient-to-r from-neon-blue to-deep-violet rounded-full" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {products.map((p, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <LiquidGlassCard className="h-full flex flex-col">
+              <div className="mb-6 flex items-center justify-between">
+                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                  {p.icon}
+                </div>
+                <span className="px-3 py-1 rounded-full bg-neon-blue/10 text-neon-blue text-[10px] font-bold uppercase tracking-widest">
+                  {p.tag}
+                </span>
+              </div>
+              <h3 className="text-2xl font-bold mb-4">{p.title}</h3>
+              <p className="text-white/50 leading-relaxed mb-8 flex-grow">
+                {p.desc}
+              </p>
+              <button className="w-full py-3 rounded-xl glass border-white/5 hover:bg-white/10 transition-all text-sm font-bold">
+                Learn More
+              </button>
+            </LiquidGlassCard>
           </motion.div>
         ))}
       </div>
@@ -420,6 +492,32 @@ const TechStack = () => {
 };
 
 const Contact = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
+  });
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('submitting');
+    try {
+      await addDoc(collection(db, 'messages'), {
+        ...formData,
+        status: 'new',
+        createdAt: serverTimestamp()
+      });
+      setFormData({ name: '', email: '', subject: '', message: '' });
+      setStatus('success');
+      setTimeout(() => setStatus('idle'), 5000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'messages');
+      setStatus('error');
+    }
+  };
+
   return (
     <section id="contact" className="py-24 px-4 relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-deep-violet/10 blur-[120px] -z-10 rounded-full" />
@@ -448,33 +546,48 @@ const Contact = () => {
         </div>
 
         <div className="flex-1">
-          <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <input 
                 type="text" 
                 placeholder="Name" 
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
                 className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all"
               />
               <input 
                 type="email" 
                 placeholder="Email" 
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
                 className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all"
               />
             </div>
             <input 
               type="text" 
               placeholder="Subject" 
+              value={formData.subject}
+              onChange={(e) => setFormData({...formData, subject: e.target.value})}
               className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all"
             />
             <textarea 
               placeholder="Your Message" 
               rows={4}
+              required
+              value={formData.message}
+              onChange={(e) => setFormData({...formData, message: e.target.value})}
               className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-neon-blue outline-none transition-all resize-none"
             />
-            <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-neon-blue to-deep-violet font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2">
-              Send Message
+            <button 
+              disabled={status === 'submitting'}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-neon-blue to-deep-violet font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {status === 'submitting' ? 'Sending...' : status === 'success' ? 'Message Sent!' : 'Send Message'}
               <Send className="w-4 h-4" />
             </button>
+            {status === 'error' && <p className="text-red-500 text-sm text-center">Failed to send message. Please try again.</p>}
           </form>
         </div>
       </div>
@@ -499,7 +612,7 @@ const Footer = () => {
             </motion.div>
 
             <p className="text-white/40 text-sm font-medium">
-              © 2026 lemedo.it. All rights reserved.
+              © 2026 lemedo.it. All rights reserved. • <Link to="/login" className="hover:text-neon-blue transition-colors">Admin</Link>
             </p>
 
             <div className="flex items-center gap-6">
@@ -525,19 +638,34 @@ const Footer = () => {
   );
 };
 
+const LandingPage = () => (
+  <>
+    <Navbar />
+    <main>
+      <Hero />
+      <Services />
+      <Featured />
+      <Portfolio />
+      <Products />
+      <TechStack />
+      <Contact />
+    </main>
+    <Footer />
+  </>
+);
+
 export default function App() {
   return (
-    <div className="selection:bg-neon-blue/30 relative min-h-screen">
-      <Navbar />
-      <main>
-        <Hero />
-        <Services />
-        <Featured />
-        <Portfolio />
-        <TechStack />
-        <Contact />
-      </main>
-      <Footer />
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="selection:bg-neon-blue/30 relative min-h-screen">
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
